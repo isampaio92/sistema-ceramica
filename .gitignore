@@ -3,3 +3,4 @@ node_modules/
 /backend/database.sqlite
 /scripts_python/venv/
 __pycache__/
+.vscode/

@@ -1,0 +1,5 @@
+node_modules/
+.env
+/backend/database.sqlite
+/scripts_python/venv/
+__pycache__/

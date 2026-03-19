@@ -5,6 +5,7 @@
         "axios",
         "chartjs",
         "descricao",
+        "dimensoes",
         "grafico",
         "graficos",
         "historico",

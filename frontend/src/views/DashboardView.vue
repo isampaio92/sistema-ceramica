@@ -1,6 +1,10 @@
 <script setup>
-    import { ref, onMounted } from 'vue';
-    import axios from 'axios';
+    import { ref, onMounted } from 'vue'
+    import axios from 'axios'
+    import { Bar } from 'vue-chartjs'
+    import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale } from 'chart.js'
+
+    ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 
     const titulo = ref('Dashboard Financeiro')
 
@@ -9,6 +13,30 @@
         despesas: 0,
         saldo: 0
     })
+
+    const dadosGrafico = ref({
+        labels: ['Receitas', 'Despesas'],
+        datasets: [
+            {
+                label: 'Visão Geral (R$)',
+                backgroundColor: ['#2ecc71', '#e74c3c'],
+                borderRadius: 6,
+                data: [0, 0]
+            }
+        ]
+    })
+
+    const opcoesGrafico = ref({
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    })
+
+    const dadosCarregados = ref(false)
 
     const formatarMoeda = (valor) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -21,6 +49,13 @@
         try {
             const resposta = await axios.get('http://localhost:3000/api/resumo')
             resumoFinanceiro.value = resposta.data
+
+            dadosGrafico.value.datasets[0].data = [
+                resposta.data.receitas,
+                resposta.data.despesas
+            ]
+
+            dadosCarregados.value = true
 
         } catch(e) {
             console.error('Erro ao buscar o resumo financeiro:', e)
@@ -58,7 +93,15 @@
         </section>
 
         <section class="graficos-container">
-
+            <div class="grafico-card">
+                <h3>Comparativo: Entradas x Saídas</h3>
+                <div class="grafico-wrapper" v-if="dadosCarregados">
+                    <Bar :data="dadosGrafico" :options="opcoesGrafico" />
+                </div>
+                <div class="grafico-wrapper" v-else style="display: flex; justify-content: center; align-items: center; color: #7f8c8d;">
+                    <p>Carregando gráfico...</p>
+                </div>
+            </div>
         </section>
 
     </div>
@@ -133,5 +176,30 @@
     .card.saldo.saldo-negativo {
         border-left-color: #e74c3c;
         background-color: #f0f8ff;
+    }
+
+    .graficos-container {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .grafico-card {
+        background-color: #fff;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+
+    .grafico-card h3 {
+        margin: 0 0 20px 0;
+        color: #2c3e50;
+        font-weight: 500;
+    }
+
+    .grafico-wrapper {
+        position: relative;
+        height: 300px;
+        width: 100%;
     }
 </style>

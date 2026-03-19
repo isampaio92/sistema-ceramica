@@ -1,8 +1,25 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import DashboardView from '../views/DashboardView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [],
+  routes: [
+    {
+      path: '/',
+      name: 'dashboard',
+      component: DashboardView
+    },
+    {
+      path: '/entradas',
+      name: 'entradas',
+      component: () => import('../views/EntradasView.vue')
+    },
+    {
+      path: '/historico',
+      name: 'historico',
+      component: () => import('../views/HistoricoView.vue')
+    }
+  ]
 })
 
 export default router

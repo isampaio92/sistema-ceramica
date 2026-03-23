@@ -20,6 +20,24 @@
     return custoVolume + custoPeso
   })
 
+  const custoMaterial = computed(() => {
+    if (!materialSelecionado.value || peso.value <= 0) return 0
+
+    const mat = materialSelecionado.value
+    let qtdTotalGramas = mat.quantidade_total
+
+    if (mat.unidade_medida === 'kg') {
+      qtdTotalGramas = mat.quantidade_total * 1000
+    }
+
+    const custoPorGrama = mat.custo_total / qtdTotalGramas
+    return custoPorGrama * peso.value
+  })
+
+  const lucroEstimado = computed(() => {
+    return valorCalculado.value - custoMaterial.value
+  })
+
   const formatarMoeda = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -137,6 +155,11 @@
 
         <div class="resultado">
           <h3> Valor sugerido: {{ formatarMoeda(valorCalculado) }}</h3>
+
+          <div v-if="materialSelecionado" class="detalhes-lucro">
+            <p>Custo do Material ({{ peso }}g): <strong>{{ formatarMoeda(custoMaterial) }}</strong></p>
+            <p class="lucro-texto">Lucro Líquido Estimado: <strong>{{ formatarMoeda(lucroEstimado) }}</strong></p>
+          </div>
         </div>
 
         <button type="submit" class="btn-salvar">Registrar Entrada</button>
@@ -216,5 +239,23 @@
 
   .btn-salvar:hover {
     background-color: #27ae60;
+  }
+
+  .detalhes-lucro {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed #bdc3c7;
+  }
+
+  .detalhes-lucro p {
+    margin: 5px 0;
+    color: #7f8c8d;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .lucro-texto {
+    color: #2ecc71 !important;
+    font-size: 1.1rem;
   }
 </style>

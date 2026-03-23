@@ -1,5 +1,22 @@
 const express = require('express');
 const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+
+const db = new sqlite3.Database(path.resolve(__dirname, 'database.sqlite'));
+
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS transacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT,
+            categoria TEXT,
+            descricao TEXT,
+            valor REAL,
+            data TEXT
+        )
+    `);
+});
 
 const app = express();
 const PORT = 3000;
@@ -16,40 +33,53 @@ const transacoesMock = [
 ];
 
 app.get('/api/transacoes', (req, res) => {
-    res.json(transacoesMock);
+    db.all("SELECT * FROM transacoes ORDER BY data DESC", [], (err, rows) => {
+        if (err) {
+            console.error(err.message);
+            return res.status(500).json({ erro: 'Erro ao buscar dados no banco.' });
+        }
+
+        res.json(rows)
+    })
 });
 
 app.get('/api/resumo', (req, res) => {
-    const receitas = transacoesMock
-        .filter(t => t.tipo === 'entrada')
-        .reduce((acc, curr) => acc + curr.valor, 0);
+    const query = `
+        SELECT
+            SUM(CASE WHEN tipo = 'entrada' THEN valor ELSE 0 END) as receitas,
+            SUM(CASE WHEN tipo = 'saida' THEN valor ELSE 0 END) as despesas
+        FROM transacoes    
+    `;
 
-    const despesas = transacoesMock
-        .filter(t => t.tipo === 'saida')
-        .reduce((acc, curr) => acc + curr.valor, 0);
+    db.get(query, [], (err, row) => {
+        if (err) {
+            console.error(err.message);
+            return res.status(500).json({ erro: 'Erro ao calcular resumo.' });
+        }
 
-    const saldo = receitas - despesas;
+        const receitas = row.receitas || 0;
+        const despesas = row.despesas || 0;
+        const saldo = receitas - despesas;
 
-    res.json({ receitas, despesas, saldo });
+        res.json({ receitas, despesas, saldo });
+    });
 });
 
 app.post('/api/transacoes', (req, res) => {
     const { descricao, valor, tipo, categoria } = req.body
+    const data = new Date().toISOString().split('T')[0]
+    
+    const query = `INSERT INTO transacoes (tipo, categoria, descricao, valor, data) 
+                   VALUES (?, ?, ?, ?, ?)`;
 
-    const novaTransacao = {
-        id: transacoesMock.length + 1,
-        descricao,
-        valor: parseFloat(valor),
-        tipo,
-        categoria,
-        data: new Date().toISOString().split('T')[0]
-    }
+    db.run(query, [tipo, categoria, descricao, valor, data], function(err) {
+        if (err) {
+            console.error(err.message);
+            return res.status(500).json({ erro: 'Erro ao salvar no banco.' });
+        }
 
-    transacoesMock.push(novaTransacao)
-
-    console.log('Nova transação registrada:', novaTransacao)
-
-    res.status(201).json(novaTransacao)
+        res.status(201).json({ id: this.lastID, descricao, valor });
+    })
 })
 
 app.listen(PORT, () => {

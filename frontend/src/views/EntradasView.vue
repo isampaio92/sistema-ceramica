@@ -1,5 +1,5 @@
 <script setup>
-  import { ref, computed } from 'vue'
+  import { ref, computed, onMounted } from 'vue'
   import axios from 'axios'
 
   const titulo = ref('Nova Entrada / Calculadora')
@@ -45,7 +45,7 @@
 
       if (materialSelecionado.value) {
         await axios.post('http://localhost:3000/api/materiais/baixa', {
-          materialID: materialSelecionado.value.id,
+          materialId: materialSelecionado.value.id,
           quantidadeUsada: peso.value
         })
       }
@@ -63,6 +63,10 @@
       alert('Erro ao conectar com o servidor.')
     }
   }
+
+  onMounted(() => {
+    carregarMateriais()
+  })
 </script>
 
 <template>
@@ -167,11 +171,16 @@
     color: #2c3e50;
   }
 
-  input {
+  input, select {
     padding: 10px;
     border: 1px solid #bdc3c7;
     border-radius: 6px;
     font-size: 1rem;
+  }
+
+  select:focus {
+    outline: none;
+    border-color: #3498db;
   }
 
   .dimensoes-grid {

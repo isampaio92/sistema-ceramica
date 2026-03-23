@@ -127,14 +127,25 @@ app.get('/api/materiais', (req, res) => {
 app.post('/api/materiais/baixa', (req, res) => {
     const { materialId, quantidadeUsada } = req.body;
 
-    const query = `UPDATE materiais 
-                   SET quantidade_total = quantidade_total - ? 
-                   WHERE id = ?`;
-
-    db.run(query, [quantidadeUsada, materialId], function(err) {
+    db.get("SELECT unidade_medida FROM materiais WHERE id = ?", [materialId], (err, row) => {
         if (err) return res.status(500).json({ erro: err.message });
-        res.json({ mensagem: 'Baixa de estoque realizada' });
-    });
+        if (!row) return res.status(404).json({ erro: 'Material não encontrado' });
+
+        let quantidadeDescontar = parseFloat(quantidadeUsada);
+
+        if (row.unidade_medida === 'kg') {
+            quantidadeDescontar = quantidadeDescontar/ 1000;
+        }
+
+        const query = `UPDATE materiais
+                       SET quantidade_total = quantidade_total - ?
+                       WHERE id = ?`;
+
+        db.run(query, [quantidadeDescontar, materialId], function(err) {
+            if (err) return res.status(500).json({ erro: err.message });
+            res.json({ mensagem: 'Baixa de estoque realizada com sucesso' });
+        })
+    })
 });
 
 app.listen(PORT, () => {

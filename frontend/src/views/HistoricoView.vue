@@ -15,8 +15,6 @@
   }
 
   const excluirItem = async (id) => {
-    console.log('Tentando excluir o ID:', id)
-
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
 
     try {

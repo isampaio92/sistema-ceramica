@@ -1,5 +1,6 @@
 <script setup>
   import { ref, computed } from 'vue'
+  import axios from 'axios'
 
   const titulo = ref('Nova Entrada / Calculadora')
 
@@ -24,12 +25,29 @@
     }).format(valor)
   }
 
-  const salvarEntrada = () => {
-    console.log('Simulando envio para o Node.js:', {
-      cliente: nomeCliente.value,
-      valorCobrado: valorCalculado.value
-    })
-    alert(`Entrada de ${formatarMoeda(valorCalculado.value)} registrada com sucesso!`)
+  const salvarEntrada = async () => {
+    try {
+      const  novaEntrada = {
+        descricao: `Queima: ${nomeCliente.value}`,
+        valor: valorCalculado.value,
+        tipo: 'entrada',
+        categoria: 'Serviço'
+      }
+
+      await axios.post('http://localhost:3000/api/transacoes', novaEntrada)
+
+      alert('Entrada registrada com sucesso no sistema!')
+
+      nomeCliente.value = ''
+      peso.value = 0
+      altura.value = 0
+      largura.value = 0
+      comprimento.value = 0
+
+    } catch(e) {
+      console.error('Erro ao salvar transação:', e)
+      alert('Erro ao conectar com o servidor.')
+    }
   }
 </script>
 

@@ -33,6 +33,25 @@ app.get('/api/resumo', (req, res) => {
     res.json({ receitas, despesas, saldo });
 });
 
+app.post('/api/transacoes', (req, res) => {
+    const { descricao, valor, tipo, categoria } = req.body
+
+    const novaTransacao = {
+        id: transacoesMock.length + 1,
+        descricao,
+        valor: parseFloat(valor),
+        tipo,
+        categoria,
+        data: new Date().toISOString().split('T')[0]
+    }
+
+    transacoesMock.push(novaTransacao)
+
+    console.log('Nova transação registrada:', novaTransacao)
+
+    res.status(201).json(novaTransacao)
+})
+
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
     console.log(`Acesse: http://localhost:${PORT}/api/transacoes`);

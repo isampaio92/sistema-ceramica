@@ -82,6 +82,19 @@ app.post('/api/transacoes', (req, res) => {
     })
 })
 
+app.delete('/api/transacoes/:id', (req, res) => {
+    const { id } = req.params;
+
+    db.run("DELETE FROM transacoes WHERE id = ?", id, function(err) {
+        if (err) {
+            console.error(err.message)
+            return res.status(404).json({ erro: 'Transação não encontrada.' });
+        }
+
+        res.json({ mensagem: 'Excluído com sucesso' });
+    })
+})
+
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
     console.log(`Acesse: http://localhost:${PORT}/api/transacoes`);

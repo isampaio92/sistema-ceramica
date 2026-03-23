@@ -9,6 +9,8 @@
   const altura = ref(0)
   const largura = ref(0)
   const comprimento = ref(0)
+  const materiaisDisponiveis = ref([])
+  const materialSelecionado = ref(null)
 
   const valorCalculado = computed(() => {
     const volume = altura.value * largura.value * comprimento.value
@@ -25,6 +27,11 @@
     }).format(valor)
   }
 
+  const carregarMateriais = async () => {
+    const res = await axios.get('http://localhost:3000/api/materiais')
+    materiaisDisponiveis.value = res.data
+  }
+
   const salvarEntrada = async () => {
     try {
       const  novaEntrada = {
@@ -36,7 +43,14 @@
 
       await axios.post('http://localhost:3000/api/transacoes', novaEntrada)
 
-      alert('Entrada registrada com sucesso no sistema!')
+      if (materialSelecionado.value) {
+        await axios.post('http://localhost:3000/api/materiais/baixa', {
+          materialID: materialSelecionado.value.id,
+          quantidadeUsada: peso.value
+        })
+      }
+
+      alert('Entrada registrada e estoque atualizado!')
 
       nomeCliente.value = ''
       peso.value = 0
@@ -78,6 +92,15 @@
               v-model="peso"
               min="0"
             />
+          </div>
+          <div class="form-group">
+            <label for="material">Material Utilizado</label>
+            <select id="material" v-model="materialSelecionado" required>
+              <option :value="null">Selecione o Material</option>
+              <option v-for="m in materiaisDisponiveis" :key="m.id" :value="m">
+                {{ m.nome }} (Disponível: {{ m.quantidade_total }}{{ m.unidade_medida }})
+              </option>
+            </select>
           </div>
           <div class="form-group">
             <label for="altura">Altura da peça (cm)</label>

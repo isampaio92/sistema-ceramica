@@ -16,6 +16,15 @@ db.serialize(() => {
             data TEXT
         )
     `);
+    db.run(`
+        CREATE TABLE IF NOT EXISTS materiais (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            quantidade_total REAL,
+            unidade_medida TEXT,
+            custo_total REAL
+        )
+    `);
 });
 
 const app = express();
@@ -40,7 +49,7 @@ app.get('/api/transacoes', (req, res) => {
         }
 
         res.json(rows)
-    })
+    });
 });
 
 app.get('/api/resumo', (req, res) => {
@@ -79,8 +88,8 @@ app.post('/api/transacoes', (req, res) => {
         }
 
         res.status(201).json({ id: this.lastID, descricao, valor });
-    })
-})
+    });
+});
 
 app.delete('/api/transacoes/:id', (req, res) => {
     const { id } = req.params;
@@ -92,8 +101,41 @@ app.delete('/api/transacoes/:id', (req, res) => {
         }
 
         res.json({ mensagem: 'Excluído com sucesso' });
-    })
-})
+    });
+});
+
+app.post('/api/materiais', (req, res) => {
+    const { nome, quantidade_total, unidade_medida, custo_total } = req.body;
+    const query = `INSERT INTO materiais (nome, quantidade_total, unidade_medida, custo_total) VALUES (?, ?, ?, ?)`;
+
+    db.run(query, [nome, quantidade_total, unidade_medida, custo_total], function(err) {
+        if (err) {
+            console.error('Erro do SQLite:', err.message);
+            return res.status(500).json({ erro: err.message });
+        }
+        res.status(201).json({ id: this.lastID });
+    });
+});
+
+app.get('/api/materiais', (req, res) => {
+    db.all("SELECT * FROM materiais", [], (err, rows) => {
+        if (err) return res.status(500).json({ erro: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/materiais/baixa', (req, res) => {
+    const { materialId, quantidadeUsada } = req.body;
+
+    const query = `UPDATE materiais 
+                   SET quantidade_total = quantidade_total - ? 
+                   WHERE id = ?`;
+
+    db.run(query, [quantidadeUsada, materialId], function(err) {
+        if (err) return res.status(500).json({ erro: err.message });
+        res.json({ mensagem: 'Baixa de estoque realizada' });
+    });
+});
 
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);

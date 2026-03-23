@@ -11,6 +11,9 @@
         <RouterLink to="/" class="menu-item">
           Dashboard
         </RouterLink>
+        <RouterLink to="/estoque" class="menu-item">
+          Estoque
+        </RouterLink>
         <RouterLink to="/entradas" class="menu-item">
           Nova Entrada
         </RouterLink>

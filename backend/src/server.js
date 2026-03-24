@@ -287,16 +287,27 @@ app.delete('/api/custos-fixos/:id', (req, res) => {
     const { id } = req.params;
 
     db.get("SELECT * FROM custos_fixos WHERE id = ?", [id], (err, custo) => {
-        if (err || !custo) return res.status(404).json({ erro: 'Custo não encontrado.' });
+        if (err) {
+            console.error("Erro ao buscar custo fixo:", err.message);
+            return res.status(500).json({ erro: err.message });
+        }
+        if (!custo) {
+            return res.status(404).json({ erro: 'Custo fixo não encontrado.' });
+        }
 
         const descricaoFinanceiro = `Custo Fixo: ${custo.descricao}`;
 
-        // Apaga todos os lançamentos passados no histórico com esse nome
-        db.run("DELETE FROM transacoes WHERE descricao = ? AND categoria = 'Custo Fixo'", [descricaoFinanceiro], () => {
-            // Depois apaga o custo fixo da tabela
-            db.run("DELETE FROM custos_fixos WHERE id = ?", [id], (errC) => {
-                if (errC) return res.status(500).json({ erro: errC.message });
-                res.json({ mensagem: 'Custo fixo e histórico excluídos!' });
+        db.run("DELETE FROM transacoes WHERE descricao = ? AND categoria = 'Custo Fixo'", [descricaoFinanceiro], function(errTransacao) {
+            if (errTransacao) {
+                console.error("Erro ao limpar histórico:", errTransacao.message);
+            }
+
+            db.run("DELETE FROM custos_fixos WHERE id = ?", [id], function(errCusto) {
+                if (errCusto) {
+                    console.error("Erro do SQLite ao apagar custo:", errCusto.message);
+                    return res.status(500).json({ erro: errCusto.message });
+                }
+                res.json({ mensagem: 'Custo fixo e histórico excluídos com sucesso!' });
             });
         });
     });

@@ -36,10 +36,11 @@ const salvarCusto = async () => {
 }
 
 const excluirCusto = async (id) => {
-  if (!confirm('Tem certeza que deseja excluir este custo fixo? (Isso não apagará os pagamentos já lançados no histórico)')) return
+  if (!confirm('Tem certeza que deseja excluir este custo fixo?')) return
 
   try {
     await axios.delete(`http://localhost:3000/api/custos-fixos/${id}`)
+    
     custos.value = custos.value.filter(c => c.id !== id)
   } catch (e) {
     console.error('Erro ao excluir:', e)
@@ -66,7 +67,7 @@ onMounted(carregarCustos)
 
 <template>
   <div class="custos-fixos">
-    <h1>Contas e Custos Fixos do Ateliê</h1>
+    <h1>Contas e Custos Fixos</h1>
 
     <div class="form-card">
       <form @submit.prevent="salvarCusto">

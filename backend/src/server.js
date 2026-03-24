@@ -106,14 +106,33 @@ app.delete('/api/transacoes/:id', (req, res) => {
 
 app.post('/api/materiais', (req, res) => {
     const { nome, quantidade_total, unidade_medida, custo_total } = req.body;
-    const query = `INSERT INTO materiais (nome, quantidade_total, unidade_medida, custo_total) VALUES (?, ?, ?, ?)`;
 
-    db.run(query, [nome, quantidade_total, unidade_medida, custo_total], function(err) {
+    const queryMaterial = `INSERT INTO materiais (nome, quantidade_total, unidade_medida, custo_total) VALUES (?, ?, ?, ?)`;
+
+    db.run(queryMaterial, [nome, quantidade_total, unidade_medida, custo_total], function(err) {
         if (err) {
-            console.error('Erro do SQLite:', err.message);
+            console.error('Erro do SQLite (Materiais):', err.message);
             return res.status(500).json({ erro: err.message });
         }
-        res.status(201).json({ id: this.lastID });
+
+        const materialId = this.lastID;
+        const dataAtual = new Date().toISOString().split('T')[0];
+        const descricaoFinanceiro = `Compra de insumo: ${nome} (${quantidade_total}${unidade_medida})`;
+
+        const queryTransacao = `INSERT INTO transacoes (tipo, categoria, descricao, valor, data) 
+                                VALUES (?, ?, ?, ?, ?)`;
+        
+        db.run(queryTransacao, ['saida', 'Material', descricaoFinanceiro, custo_total, dataAtual], function(errTransacao) {
+            if (errTransacao) {
+                console.error('Erro do SQLite (Transações):', errTransacao.message);
+                return res.status(500).json({ erro: errTransacao.message });
+            }
+
+            res.status(201).json({
+                id: materialId,
+                mensagem: 'Material cadastrado e despesa registrada com sucesso!'
+            });
+        });
     });
 });
 

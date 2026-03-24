@@ -1,82 +1,130 @@
 <script setup>
-  import { ref, onMounted } from 'vue'
-  import axios from 'axios'
+import { ref, computed, onMounted } from 'vue'
+import axios from 'axios'
 
-  const transacoes = ref([])
+const transacoes = ref([])
 
-  const carregarHistorico = async () => {
-    try {
-      const resposta = await axios.get('http://localhost:3000/api/transacoes')
-      transacoes.value = resposta.data
+const filtroTexto = ref('')
+const filtroMes = ref('')
+const filtroTipo = ref('todos')
 
-    } catch(e) {
-      console.error('Erro ao buscar histórico:', e)
-    }
+const carregarTransacoes = async () => {
+  try {
+    const res = await axios.get('http://localhost:3000/api/transacoes')
+    transacoes.value = res.data
+  } catch (e) {
+    console.error('Erro ao carregar histórico:', e)
   }
+}
 
-  const excluirItem = async (id) => {
-    if (!confirm('Tem certeza que deseja excluir este registro?')) return
+const excluirTransacao = async (id) => {
+  if (!confirm('Deseja realmente excluir este lançamento? (Isso pode estornar materiais do estoque)')) return
 
-    try {
-      await axios.delete(`http://localhost:3000/api/transacoes/${id}`)
-
-      transacoes.value = transacoes.value.filter(item => item.id !== id)
-
-    } catch(e) {
-      console.error('Erro ao excluir:', e)
-      alert('Erro ao excluir o registro.')
-    }
+  try {
+    await axios.delete(`http://localhost:3000/api/transacoes/${id}`)
+    transacoes.value = transacoes.value.filter(t => t.id !== id)
+    alert('Excluído com sucesso!')
+  } catch (e) {
+    console.error('Erro ao excluir:', e)
+    alert('Erro ao excluir a transação.')
   }
+}
 
-  const formatarMoeda = (valor) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
-  }
+const transacoesFiltradas = computed(() => {
+  return transacoes.value.filter(t => {
+    const busca = filtroTexto.value.toLowerCase()
+    const matchTexto = t.descricao.toLowerCase().includes(busca) || 
+                       t.categoria.toLowerCase().includes(busca)
+    
+    const matchTipo = filtroTipo.value === 'todos' || t.tipo === filtroTipo.value
 
-  const formatarData = (dataStr) => {
-    const [ano, mes, dia] = dataStr.split('-')
-    return `${dia}/${mes}/${ano}`
-  }
+    const matchMes = !filtroMes.value || t.data.startsWith(filtroMes.value)
 
-  onMounted(() => {
-    carregarHistorico()
+    return matchTexto && matchTipo && matchMes
   })
+})
 
+// Formatação Visual
+const formatarMoeda = (valor) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
+}
+
+const formatarData = (dataISO) => {
+  if (!dataISO) return '-'
+  const [ano, mes, dia] = dataISO.split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
+onMounted(carregarTransacoes)
 </script>
 
 <template>
   <div class="historico">
-    <header class="header">
-      <h1>Histórico de Transações</h1>
-      <p>Confira todas as entradas e saídas registradas.</p>
-    </header>
+    <h1>Histórico de Transações</h1>
+
+    <div class="filtros-card">
+      <div class="filtro-group search-bar">
+        <label for="busca">Pesquisar</label>
+        <input 
+          type="text" 
+          id="busca" 
+          v-model="filtroTexto" 
+          placeholder="Digite um nome, material ou serviço..." 
+        />
+      </div>
+
+      <div class="filtro-group">
+        <label for="mes">Filtrar por Mês</label>
+        <input 
+          type="month" 
+          id="mes" 
+          v-model="filtroMes" 
+        />
+      </div>
+
+      <div class="filtro-group">
+        <label for="tipo">Tipo de Movimentação</label>
+        <select id="tipo" v-model="filtroTipo">
+          <option value="todos">Todas as Movimentações</option>
+          <option value="entrada">Apenas Entradas (Receitas)</option>
+          <option value="saida">Apenas Saídas (Despesas)</option>
+        </select>
+      </div>
+    </div>
 
     <div class="tabela-container">
-      <table class="tabela-financeira">
+      <table>
         <thead>
           <tr>
             <th>Data</th>
-            <th>Descrição</th>
+            <th>Tipo</th>
             <th>Categoria</th>
+            <th>Descrição</th>
             <th>Valor</th>
             <th>Ações</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in transacoes" :key="item.dia" :class="item.tipo">
-            <td>{{ formatarData(item.data) }}</td>
-            <td>{{ item.descricao }}</td>
-            <td><span class="tag">{{ item.categoria }}</span></td>
-            <td class="valor-celula">
-              {{ item.tipo == 'saida' ? '-' : '' }} {{ formatarMoeda(item.valor) }}
+          <tr v-if="transacoesFiltradas.length === 0">
+            <td colspan="6" class="vazio">Nenhuma transação encontrada para estes filtros.</td>
+          </tr>
+          <tr v-for="t in transacoesFiltradas" :key="t.id">
+            <td class="col-data">{{ formatarData(t.data) }}</td>
+            <td>
+              <span :class="['badge', t.tipo === 'entrada' ? 'badge-entrada' : 'badge-saida']">
+                {{ t.tipo === 'entrada' ? 'Entrada' : 'Saída' }}
+              </span>
+            </td>
+            <td>{{ t.categoria }}</td>
+            <td>{{ t.descricao }}</td>
+            <td :class="['valor', t.tipo === 'entrada' ? 'text-green' : 'text-red']">
+              {{ formatarMoeda(t.valor) }}
             </td>
             <td>
-              <button @click="excluirItem(item.id)" class="btn-excluir">
+              <button @click="excluirTransacao(t.id)" class="btn-excluir" title="Excluir Lançamento">
                 🗑️
               </button>
             </td>
-          </tr>
-          <tr v-if="transacoes.length === 0">
-            <td colspan="4" style="text-align: center; padding: 20px;">Nenhuma transação encontrada.</td>
           </tr>
         </tbody>
       </table>
@@ -85,63 +133,56 @@
 </template>
 
 <style scoped>
-  .tabela-container {
-    background-color: #fff;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-    margin-top: 20px;
-  }
+.historico { padding: 20px; }
 
-  .tabela-financeira {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-  }
+.filtros-card {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
 
-  .tabela-financeira th {
-    background-color: #f8f9fa;
-    padding: 15px;
-    color: #7f8c8d;
-    font-weight: 600;
-    border-bottom: 2px solid #eee;
-  }
+.filtro-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 200px;
+}
 
-  .tabela-financeira td {
-    padding: 15px;
-    border-bottom: 1px solid #eee;
-    color: #2c3e50;
-  }
+.search-bar { flex: 2; }
 
-  tr.entrada .valor-celula {
-    color: #2ecc71;
-    font-weight: bold;
-  }
+label { font-size: 0.9rem; margin-bottom: 5px; color: #666; font-weight: bold; }
+input, select {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  background-color: #fcfcfc;
+}
+input:focus, select:focus { outline: none; border-color: #3498db; }
 
-  tr.saida .valor-celula {
-    color: #e74c3c;
-    font-weight: bold;
-  }
+.tabela-container { background-color: #fff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 15px 12px; text-align: left; border-bottom: 1px solid #eee; }
+th { background-color: #f8f9fa; color: #34495e; font-weight: bold; }
+.vazio { text-align: center; color: #7f8c8d; padding: 30px; font-style: italic; }
 
-  .tag {
-    background-color: #ecf0f1;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    color: #7f8c8d;
-  }
+.col-data { color: #7f8c8d; font-size: 0.95rem; }
 
-  .btn-excluir {
-    bottom: none;
-    border: none;
-    cursor: pointer;
-    font-size: 1.2rem;
-    padding: 5px;
-    border-radius: 4px;
-    transition: background 0.2s;
-  }
+.badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; text-transform: uppercase; }
+.badge-entrada { background-color: #e8f8f5; color: #27ae60; }
+.badge-saida { background-color: #fdedec; color: #c0392b; }
 
-  .btn-excluir:hover {
-    background: #ffebee;
-  }
+.valor { font-weight: bold; }
+.text-green { color: #27ae60; }
+.text-red { color: #c0392b; }
+
+.btn-excluir {
+  background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 5px; border-radius: 4px; transition: background 0.2s;
+}
+.btn-excluir:hover { background-color: #ffebee; }
 </style>

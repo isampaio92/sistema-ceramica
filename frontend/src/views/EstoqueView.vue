@@ -39,6 +39,18 @@
         }
     }
 
+    const excluirMaterial = async (id) => {
+        if (!confirm('Tem certeza que deseja excluir este material?')) return
+
+        try {
+            await axios.delete(`http://localhost:3000/api/materiais/${id}`)
+            materiais.value = materiais.value.filter(m => m.id !== id)
+        } catch (e) {
+            console.error('Erro ao excluir:', e)
+            alert('Erro ao excluir o registro.')
+        }
+    }
+
     const formatarMoeda = (valor) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
     }
@@ -106,6 +118,7 @@
                         <th>Qtd. Total</th>
                         <th>Custo Total</th>
                         <th>Custo Unitário</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -114,6 +127,11 @@
                         <td>{{ m.quantidade_total }} {{ m.unidade_medida }}</td>
                         <td>{{ formatarMoeda(m.custo_total) }}</td>
                         <td>{{ formatarMoeda(m.custo_total / m.quantidade_total) }} / {{ m.unidade_medida }}</td>
+                        <td>
+                            <button @click="excluirMaterial(m.id)" class="btn-excluir" title="Excluir">
+                                🗑️
+                            </button>
+                        </td>
                     </tr>
                 </tbody>
             </table>
@@ -189,4 +207,16 @@
         background-color: #f9f9f9;
         color: #7f8c8d;
     }
+
+    .btn-excluir {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1.2rem;
+        padding: 5px;
+        border-radius: 4px;
+        transition: background 0.2s;
+        margin-left: 10px; /* Dá um espacinho do botão de lançar */
+    }
+    .btn-excluir:hover { background-color: #ffebee; }
 </style>

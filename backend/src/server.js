@@ -16,6 +16,7 @@ db.serialize(() => {
             data TEXT
         )
     `);
+    
     db.run(`
         CREATE TABLE IF NOT EXISTS materiais (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,6 +24,15 @@ db.serialize(() => {
             quantidade_total REAL,
             unidade_medida TEXT,
             custo_total REAL
+        )
+    `);
+    
+    db.run(`
+        CREATE TABLE IF NOT EXISTS custos_fixos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            descricao TEXT,
+            valor REAL,
+            dia_vencimento INTEGER
         )
     `);
 });
@@ -94,44 +104,41 @@ app.post('/api/transacoes', (req, res) => {
 app.delete('/api/transacoes/:id', (req, res) => {
     const { id } = req.params;
 
-    db.run("DELETE FROM transacoes WHERE id = ?", id, function(err) {
-        if (err) {
-            console.error(err.message)
-            return res.status(404).json({ erro: 'Transação não encontrada.' });
-        }
+    db.get("SELECT * FROM transacoes WHERE id = ?", [id], (err, transacao) => {
+        if (err || !transacao) return res.status(404).json({ erro: 'Transação não encontrada.' });
 
-        res.json({ mensagem: 'Excluído com sucesso' });
+        db.run("DELETE FROM transacoes WHERE id = ?", [id], function(errDel) {
+            if (errDel) return res.status(500).json({ erro: errDel.message });
+
+            if (transacao.categoria === 'Material' && transacao.descricao.startsWith('Compra de insumo:')) {
+                const nomeMaterial = transacao.descricao.split('Compra de insumo: ')[1].split(' (')[0].trim();
+
+                db.run("DELETE FROM materiais WHERE nome = ?", [nomeMaterial], (errMat) => {
+                    if (errMat) console.error("Erro ao apagar material em cascata:", errMat.message);
+                });
+            }
+
+            res.json({ mensagem: 'Transação excluída e estoque atualizado se necessário!' });
+        });
     });
 });
 
 app.post('/api/materiais', (req, res) => {
     const { nome, quantidade_total, unidade_medida, custo_total } = req.body;
-
     const queryMaterial = `INSERT INTO materiais (nome, quantidade_total, unidade_medida, custo_total) VALUES (?, ?, ?, ?)`;
 
     db.run(queryMaterial, [nome, quantidade_total, unidade_medida, custo_total], function(err) {
-        if (err) {
-            console.error('Erro do SQLite (Materiais):', err.message);
-            return res.status(500).json({ erro: err.message });
-        }
+        if (err) return res.status(500).json({ erro: err.message });
 
         const materialId = this.lastID;
         const dataAtual = new Date().toISOString().split('T')[0];
+        
         const descricaoFinanceiro = `Compra de insumo: ${nome} (${quantidade_total}${unidade_medida})`;
-
-        const queryTransacao = `INSERT INTO transacoes (tipo, categoria, descricao, valor, data) 
-                                VALUES (?, ?, ?, ?, ?)`;
+        const queryTransacao = `INSERT INTO transacoes (tipo, categoria, descricao, valor, data) VALUES (?, ?, ?, ?, ?)`;
         
         db.run(queryTransacao, ['saida', 'Material', descricaoFinanceiro, custo_total, dataAtual], function(errTransacao) {
-            if (errTransacao) {
-                console.error('Erro do SQLite (Transações):', errTransacao.message);
-                return res.status(500).json({ erro: errTransacao.message });
-            }
-
-            res.status(201).json({
-                id: materialId,
-                mensagem: 'Material cadastrado e despesa registrada com sucesso!'
-            });
+            if (errTransacao) console.error('Erro na transação:', errTransacao.message);
+            res.status(201).json({ id: materialId, mensagem: 'Material e despesa criados com sucesso!' });
         });
     });
 });
@@ -165,6 +172,81 @@ app.post('/api/materiais/baixa', (req, res) => {
             res.json({ mensagem: 'Baixa de estoque realizada com sucesso' });
         })
     })
+});
+
+app.delete('/api/materiais/:id', (req, res) => {
+    const { id } = req.params;
+    
+    db.get("SELECT * FROM materiais WHERE id = ?", [id], (err, material) => {
+        if (err || !material) return res.status(404).json({ erro: 'Material não encontrado.' });
+
+        const buscaDescricao = `Compra de insumo: ${material.nome}%`;
+
+        db.run("DELETE FROM transacoes WHERE descricao LIKE ? AND categoria = 'Material'", [buscaDescricao], () => {
+            
+            db.run("DELETE FROM materiais WHERE id = ?", [id], (errM) => {
+                if (errM) return res.status(500).json({ erro: errM.message });
+                res.json({ mensagem: 'Material e transação excluídos do sistema!' });
+            });
+        });
+    });
+});
+
+app.get('/api/custos-fixos', (req, res) => {
+    db.all("SELECT * FROM custos_fixos ORDER BY dia_vencimento ASC", [], (err, rows) => {
+        if (err) return res.status(500).json({ erro: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/custos-fixos', (req, res) => {
+    const { descricao, valor, dia_vencimento } = req.body;
+    const query = `INSERT INTO custos_fixos (descricao, valor, dia_vencimento) VALUES (?, ?, ?)`;
+
+    db.run(query, [descricao, valor, dia_vencimento], function(err) {
+        if (err) return res.status(500).json({ erro: err.message });
+        res.status(201).json({ id: this.lastID });
+    });
+});
+
+app.post('/api/custos-fixos/:id/lancar', (req, res) => {
+    const { id } = req.params;
+
+    db.get("SELECT * FROM custos_fixos WHERE id = ?", [id], (err, custo) => {
+        if (err) return res.status(500).json({ erro: err.message });
+        if (!custo) return res.status(404).json({ erro: 'Custo fixo não encontrado' });
+
+        const dataAtual = new Date().toISOString().split('T')[0];
+        const descricaoFinanceiro = `Custo Fixo: ${custo.descricao}`;
+        
+        const queryTransacao = `INSERT INTO transacoes (tipo, categoria, descricao, valor, data) 
+                                VALUES (?, ?, ?, ?, ?)`;
+
+        db.run(queryTransacao, ['saida', 'Custo Fixo', descricaoFinanceiro, custo.valor, dataAtual], function(errTransacao) {
+            if (errTransacao) return res.status(500).json({ erro: errTransacao.message });
+            
+            res.status(201).json({ mensagem: 'Custo fixo lançado no financeiro com sucesso!' });
+        });
+    });
+});
+
+app.delete('/api/custos-fixos/:id', (req, res) => {
+    const { id } = req.params;
+
+    db.get("SELECT * FROM custos_fixos WHERE id = ?", [id], (err, custo) => {
+        if (err || !custo) return res.status(404).json({ erro: 'Custo não encontrado.' });
+
+        const descricaoFinanceiro = `Custo Fixo: ${custo.descricao}`;
+
+        // Apaga todos os lançamentos passados no histórico com esse nome
+        db.run("DELETE FROM transacoes WHERE descricao = ? AND categoria = 'Custo Fixo'", [descricaoFinanceiro], () => {
+            // Depois apaga o custo fixo da tabela
+            db.run("DELETE FROM custos_fixos WHERE id = ?", [id], (errC) => {
+                if (errC) return res.status(500).json({ erro: errC.message });
+                res.json({ mensagem: 'Custo fixo e histórico excluídos!' });
+            });
+        });
+    });
 });
 
 app.listen(PORT, () => {

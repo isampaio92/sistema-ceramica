@@ -17,6 +17,9 @@
         <RouterLink to="/entradas" class="menu-item">
           Nova Entrada
         </RouterLink>
+        <RouterLink to="/custos-fixos" class="menu-item">
+          Contas e Custos Fixos
+        </RouterLink>
         <RouterLink to="/historico" class="menu-item">
           Historico
         </RouterLink>

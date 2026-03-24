@@ -21,6 +21,11 @@ const router = createRouter({
       component: () => import('../views/EntradasView.vue')
     },
     {
+      path: '/custos-fixos',
+      name: 'custos-fixos',
+      component: () => import('../views/CustosFixosView.vue')
+    },
+    {
       path: '/historico',
       name: 'historico',
       component: () => import('../views/HistoricoView.vue')

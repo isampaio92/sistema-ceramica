@@ -13,9 +13,11 @@
         "grafico",
         "graficos",
         "historico",
+        "lancar",
         "opcoes",
         "saida",
         "topbar",
+        "transacao",
         "transacoes"
     ]
 }

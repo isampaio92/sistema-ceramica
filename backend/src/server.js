@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { calcularPrecoPrazo } = require('correios-brasil');
 
 const db = new sqlite3.Database(path.resolve(__dirname, 'database.sqlite'));
 
@@ -13,7 +14,9 @@ db.serialize(() => {
             categoria TEXT,
             descricao TEXT,
             valor REAL,
-            data TEXT
+            data TEXT,
+            material_id INTEGER, 
+            peso_usado REAL
         )
     `);
     
@@ -85,16 +88,23 @@ app.get('/api/resumo', (req, res) => {
 });
 
 app.post('/api/transacoes', (req, res) => {
-    const { descricao, valor, tipo, categoria } = req.body
-    const data = new Date().toISOString().split('T')[0]
+    const { descricao, valor, tipo, categoria, material_id, peso_usado } = req.body;
+    const data = new Date().toISOString().split('T')[0];
     
-    const query = `INSERT INTO transacoes (tipo, categoria, descricao, valor, data) 
-                   VALUES (?, ?, ?, ?, ?)`;
+    const query = `INSERT INTO transacoes (tipo, categoria, descricao, valor, data, material_id, peso_usado) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
-    db.run(query, [tipo, categoria, descricao, valor, data], function(err) {
-        if (err) {
-            console.error(err.message);
-            return res.status(500).json({ erro: 'Erro ao salvar no banco.' });
+    db.run(query, [tipo, categoria, descricao, valor, data, material_id || null, peso_usado || null], function(err) {
+        if (err) return res.status(500).json({ erro: err.message });
+        
+        if (material_id && peso_usado) {
+            db.get("SELECT unidade_medida FROM materiais WHERE id = ?", [material_id], (err, row) => {
+                if (row) {
+                    let qtdDescontar = parseFloat(peso_usado);
+                    if (row.unidade_medida === 'kg') qtdDescontar = qtdDescontar / 1000;
+                    db.run("UPDATE materiais SET quantidade_total = quantidade_total - ? WHERE id = ?", [qtdDescontar, material_id]);
+                }
+            });
         }
 
         res.status(201).json({ id: this.lastID, descricao, valor });
@@ -112,15 +122,58 @@ app.delete('/api/transacoes/:id', (req, res) => {
 
             if (transacao.categoria === 'Material' && transacao.descricao.startsWith('Compra de insumo:')) {
                 const nomeMaterial = transacao.descricao.split('Compra de insumo: ')[1].split(' (')[0].trim();
+                db.run("DELETE FROM materiais WHERE nome = ?", [nomeMaterial]);
+            }
 
-                db.run("DELETE FROM materiais WHERE nome = ?", [nomeMaterial], (errMat) => {
-                    if (errMat) console.error("Erro ao apagar material em cascata:", errMat.message);
+            if (transacao.tipo === 'entrada' && transacao.material_id && transacao.peso_usado) {
+                db.get("SELECT unidade_medida FROM materiais WHERE id = ?", [transacao.material_id], (errM, row) => {
+                    if (row) {
+                        let qtdDevolver = parseFloat(transacao.peso_usado);
+                        if (row.unidade_medida === 'kg') qtdDevolver = qtdDevolver / 1000;
+                        db.run("UPDATE materiais SET quantidade_total = quantidade_total + ? WHERE id = ?", [qtdDevolver, transacao.material_id]);
+                    }
                 });
             }
 
             res.json({ mensagem: 'Transação excluída e estoque atualizado se necessário!' });
         });
     });
+});
+
+app.post('/api/frete', async (req, res) => {
+    const { cepDestino, pesoKg } = req.body;
+
+    let args = {
+        sCepOrigem: '20040000',
+        sCepDestino: cepDestino.replace(/\D/g, ''),
+        nVlPeso: pesoKg.toString(),
+        nCdFormato: '1',
+        nVlComprimento: '20',
+        nVlAltura: '20',
+        nVlLargura: '20',
+        nCdServico: ['04014', '04510'],
+        nVlDiametro: '0',
+    };
+
+    try {
+        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+        
+        const resultados = await Promise.race([calcularPrecoPrazo(args), timeout]);
+        
+        const fretesFormatados = resultados.map(frete => ({
+            tipo: frete.Codigo === '04014' ? 'SEDEX' : 'PAC',
+            valor: frete.Valor,
+            prazo: frete.PrazoEntrega + ' dias úteis',
+        }));
+
+        res.json(fretesFormatados);
+    } catch (error) {
+        console.error('API dos Correios instável/lenta:', error.message);
+        res.json([
+            { tipo: 'PAC (Sistema Offline)', valor: '28,50', prazo: '8 dias úteis' },
+            { tipo: 'SEDEX (Sistema Offline)', valor: '49,90', prazo: '3 dias úteis' }
+        ]);
+    }
 });
 
 app.post('/api/materiais', (req, res) => {
